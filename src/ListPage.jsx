@@ -1,58 +1,92 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE_URL } from "./config";
-import { capitalize, getIdFromUrl } from "./utils";
+import { capitalize } from "./utils";
 import SearchForm from "./SearchForm";
+
+const TYPES = ["All", "Grass", "Fire", "Water", "Bug", "Electric"];
 
 export default function ListPage() {
   const [pokemons, setPokemons] = useState([]);
+  const [activeFilter, setActiveFilter] = useState("All");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function loadPokemons() {
+    async function loadData() {
       setIsLoading(true);
-      setError(null);
       try {
-        const response = await fetch(`${API_BASE_URL}/pokemon?limit=20`);
-        if (!response.ok) {
-          throw new Error(`Server status: ${response.status}`);
+        let results = [];
+        if (activeFilter === "All") {
+          const res = await fetch(`${API_BASE_URL}/pokemon?limit=21`);
+          const data = await res.json();
+          results = data.results;
+        } else {
+          const res = await fetch(`${API_BASE_URL}/type/${activeFilter.toLowerCase()}`);
+          const data = await res.json();
+          // Extract first 21 pokemon from the type endpoint
+          results = data.pokemon.slice(0, 21).map(p => p.pokemon);
         }
-        const data = await response.json();
-        setPokemons(data.results);
+
+        // Fetch details for each to get types and sprites
+        const detailedData = await Promise.all(
+          results.map(async (p) => {
+            const res = await fetch(p.url);
+            return res.json();
+          })
+        );
+        setPokemons(detailedData);
       } catch (err) {
-        setError(err.message);
+        console.error(err);
       } finally {
         setIsLoading(false);
       }
     }
-    loadPokemons();
-  }, []);
+    loadData();
+  }, [activeFilter]);
 
   return (
     <div>
       <SearchForm />
-      {isLoading && <p style={{ color: "var(--text-muted)" }}>Loading Pokémon...</p>}
-      {error && <p style={{ color: "#f87171" }}>Error: {error}</p>}
       
-      {!isLoading && !error && (
-        <ul className="pokemon-list">
-          {pokemons.map((pokemon) => {
-            const id = getIdFromUrl(pokemon.url);
-            const spriteUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
-            return (
-              <li key={pokemon.name}>
-                <Link to={`/pokemon/${pokemon.name}`} className="pokemon-card">
-                  <div className="pokemon-info">
-                    <img src={spriteUrl} alt={pokemon.name} width="48" height="48" />
-                    <span className="pokemon-name">{capitalize(pokemon.name)}</span>
-                  </div>
-                  <span className="badge">#{String(id).padStart(3, '0')}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <div className="filter-container">
+        {TYPES.map(type => (
+          <button 
+            key={type} 
+            className={`filter-btn ${activeFilter === type ? 'active' : ''}`}
+            onClick={() => setActiveFilter(type)}
+          >
+            {type}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? <p style={{textAlign: 'center'}}>Loading...</p> : (
+        <div className="pokemon-grid">
+          {pokemons.map((pokemon) => (
+            <Link to={`/pokemon/${pokemon.name}`} className="card" key={pokemon.id}>
+              <div className="card-info">
+                <div>
+                  {pokemon.types.map(t => (
+                    <span key={t.type.name} className="type-badge" style={{background: t.type.name === 'grass' ? '#dcfce7' : t.type.name === 'poison' ? '#f3e8ff' : '#f1f5f9'}}>
+                      {t.type.name}
+                    </span>
+                  ))}
+                </div>
+                <h3 className="card-title">{pokemon.name}</h3>
+                <p style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>A strange seed was planted on its back at birth...</p>
+                <span className="know-more">Know More</span>
+              </div>
+              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
+                <span className="card-id">#{String(pokemon.id).padStart(3, '0')}</span>
+                <img 
+                  src={pokemon.sprites.front_default} 
+                  alt={pokemon.name} 
+                  style={{width: '96px', marginTop: 'auto', imageRendering: 'pixelated'}} 
+                />
+              </div>
+            </Link>
+          ))}
+        </div>
       )}
     </div>
   );

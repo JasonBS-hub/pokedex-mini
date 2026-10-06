@@ -5,7 +5,7 @@ export default function Layout() {
     <div className="app-container">
       <header>
         <Link to="/" style={{ textDecoration: "none" }}>
-          <h1>PokéDex <span>Mini</span></h1>
+          <div className="logo">PokéDex</div>
         </Link>
       </header>
       <main>
